@@ -1,4 +1,3 @@
-import logo from './logo.svg'
 import './App.css'
 import Helmet from 'react-helmet'
 
@@ -1728,6 +1727,7 @@ export const getCategoryStructuredData = (category) => {
     '@context': 'http://schema.org/',
     '@type': ['ItemList', 'Recipe'],
     name: category.title,
+    description: category.description,
     author: {
       '@type': 'Organization',
       '@id': 'https://www.gousto.co.uk/',
