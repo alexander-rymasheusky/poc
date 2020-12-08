@@ -1,5 +1,6 @@
 import './App.css'
 import Helmet from 'react-helmet'
+import stripTags from 'striptags'
 
 const DEFAULT_BASE_MEDIA_URL = '/test-food-pics/'
 
@@ -7,6 +8,167 @@ const DEFAULT_PAIRS = [
   [400, 320],
   [1500, 1500],
 ]
+
+export const formatValue = (value, units, digits) => {
+  if (value === null) {
+    return null
+  }
+
+  // For gram values, the data is in mg.
+  const convertedValue = units === 'g' ? value / 1000 : value
+  const roundedValue = convertedValue.toFixed(digits)
+
+  return `${roundedValue} ${units}`
+}
+
+export const extractValue = (
+  nutritionalInformation,
+  column,
+  key,
+  conversion = 'none',
+) => {
+  if (
+    !(
+      nutritionalInformation &&
+      nutritionalInformation[column] &&
+      nutritionalInformation[column][key]
+    )
+  ) {
+    return null
+  }
+
+  const raw = nutritionalInformation[column][key]
+  const parsed = Number.parseFloat(raw)
+
+  if (Number.isNaN(parsed)) {
+    return null
+  }
+
+  if (conversion === 'none') {
+    return parsed
+  } else if (conversion === 'mg->g') {
+    return parsed / 1000
+  } else if (conversion === 'salt_mg->sodium_g') {
+    return (parsed / 1000) * 0.388
+  } else {
+    return null
+  }
+}
+
+export const getNutritionStructuredData = (nutritionalInformation) => {
+  if (!nutritionalInformation) {
+    return null
+  }
+
+  // https://schema.org/NutritionInformation
+  //   Properties from NutritionInformation
+  // y calories     Energy     The number of calories.
+  // y carbohydrateContent     Mass     The number of grams of carbohydrates.
+  // y fatContent     Mass     The number of grams of fat.
+  // y fiberContent     Mass     The number of grams of fiber.
+  // y proteinContent     Mass     The number of grams of protein.
+  // y saturatedFatContent     Mass     The number of grams of saturated fat.
+  // y sugarContent     Mass     The number of grams of sugar.
+
+  // ? servingSize     Text     The serving size, in terms of the number of volume or mass.
+  // possibly in net_weight_mg
+
+  // n sodiumContent     Mass     The number of milligrams of sodium.
+  // n cholesterolContent     Mass     The number of milligrams of cholesterol.
+  // n transFatContent     Mass     The number of grams of trans fat.
+  // n unsaturatedFatContent     Mass     The number of grams of unsaturated fat.
+
+  // In gousto2-frontend we see:
+  // if (array_key_exists('salt', $portionNutrition)) {
+  //     /*
+  //         according to USDA 1g of salt = 388mg of sodium:
+  //         https://ndb.nal.usda.gov/ndb/foods/show/296?man=&lfacet=&count=&max=35&qlookup=02047&offset=&sort=&format=Abridged&reportfmt=other&rptfrm=&ndbno=&nutrient1=&nutrient2=&nutrient3=&subset=&totCount=&measureby=&_action_show=Apply+Changes&Qv=0.01&Q687=1&Q688=1&Q689=1&Q690=1
+  //     */
+  //     $sodiumContent = $portionNutrition['salt'] * 388;
+  // } else {
+  //     $sodiumContent = null;
+  // }
+
+  // TODO extract and format values
+
+  const calories = extractValue(
+    nutritionalInformation,
+    'per_portion',
+    'energy_kcal',
+  )
+
+  const convertWeightValue = (key, options = {}) => {
+    const value = extractValue(nutritionalInformation, 'per_portion', key)
+    if (value === null) {
+      return null
+    }
+
+    const grams = value / 1000
+
+    const afterConversion = options.saltToSodium ? grams * 0.388 : grams
+
+    return `${afterConversion.toFixed(2)} grams`
+  }
+
+  return {
+    '@type': 'NutritionInformation',
+    calories: calories ? null : `${calories.toFixed(0)} calories`,
+    carbohydrateContent: convertWeightValue('carbs_mg'),
+    fatContent: convertWeightValue('fat_mg'),
+    fiberContent: convertWeightValue('fibre_mg'),
+    proteinContent: convertWeightValue('protein_mg'),
+    sugarContent: convertWeightValue('carbs_sugars_mg'),
+    sodiumContent: convertWeightValue('salt_mg', { saltToSodium: true }),
+  }
+}
+
+const htmlToPlainText = (html) => {
+  return stripTags(html)
+}
+
+export const getValue = (obj, key, defaultValue = '') => {
+  return obj && obj[key] ? obj[key] : defaultValue
+}
+export const getRecipeStructuredData = (recipe) => {
+  const {
+    title,
+    description,
+    cookingTime,
+    ingredients,
+    instructions,
+    averageRating,
+    amountOfReviews,
+    cuisine,
+    nutritional_information: nutritionalInformation,
+  } = recipe
+
+  return {
+    '@context': 'http://schema.org/',
+    '@type': 'Recipe',
+    name: title,
+    author: {
+      '@type': 'Person',
+      name: 'Jordan Moore',
+    },
+    image: {
+      '@type': 'ImageObject',
+      url: recipe.media[0].url,
+    },
+    description,
+    totalTime: `PT${cookingTime}M`,
+    recipeYield: '2 or 4 servings',
+    recipeCategory: 'Jamaican',
+    recipeIngredient: ingredients.map(({ label }) => label),
+    recipeInstructions: instructions.map(({ html }) => htmlToPlainText(html)),
+    aggregateRating: {
+      '@type': 'AggregateRating',
+      ratingValue: averageRating,
+      reviewCount: amountOfReviews,
+    },
+    recipeCuisine: cuisine,
+    nutrition: getNutritionStructuredData(nutritionalInformation),
+  }
+}
 
 export const createMediaSet = (
   fileNameBase,
@@ -1740,27 +1902,16 @@ export const getCategoryStructuredData = (category) => {
       url: category.representativeRecipe.media[0].url,
     },
 
-    itemListOrder: 'https://schema.org/ItemListOrderAscending',
+    itemListOrder: 'https://schema.org/ItemListUnordered',
     numberOfItems: 68,
 
-    itemListElement: category.recipes.map(
-      ({ title, description, media, cuisine }, index) => {
-        return {
-          '@type': 'ListItem',
-          position: index + 1,
-          item: {
-            '@type': 'Recipe',
-            name: title,
-            description,
-            recipeCuisine: cuisine,
-            image: {
-              '@type': 'ImageObject',
-              url: media[0].url,
-            },
-          },
-        }
-      },
-    ),
+    itemListElement: category.recipes.map((recipe, index) => {
+      return {
+        '@type': 'ListItem',
+        position: index + 1,
+        item: getRecipeStructuredData(recipe),
+      }
+    }),
   }
 }
 
