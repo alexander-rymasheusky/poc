@@ -140,6 +140,7 @@ export const getRecipeStructuredData = (recipe) => {
     amountOfReviews,
     cuisine,
     nutritional_information: nutritionalInformation,
+    url,
   } = recipe
 
   return {
@@ -167,6 +168,7 @@ export const getRecipeStructuredData = (recipe) => {
     },
     recipeCuisine: cuisine,
     nutrition: getNutritionStructuredData(nutritionalInformation),
+    url: `https://gousto.co.uk${url}`,
   }
 }
 
@@ -1888,6 +1890,7 @@ export const getCategoryStructuredData = (category) => {
   return {
     '@context': 'http://schema.org/',
     '@type': ['ItemList', 'Recipe'],
+    url: `https://gousto.co.uk${category.url}`,
     name: category.title,
     description: category.description,
     author: {
