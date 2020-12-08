@@ -129,7 +129,7 @@ const htmlToPlainText = (html) => {
 export const getValue = (obj, key, defaultValue = '') => {
   return obj && obj[key] ? obj[key] : defaultValue
 }
-export const getRecipeStructuredData = (recipe) => {
+export const getRecipeStructuredData = (recipe, overrideUrl = null) => {
   const {
     title,
     description,
@@ -143,7 +143,7 @@ export const getRecipeStructuredData = (recipe) => {
     url,
   } = recipe
 
-  return {
+  const rec = {
     '@context': 'http://schema.org/',
     '@type': 'Recipe',
     name: title,
@@ -170,6 +170,11 @@ export const getRecipeStructuredData = (recipe) => {
     nutrition: getNutritionStructuredData(nutritionalInformation),
     url: `https://gousto.co.uk${url}`,
   }
+
+  if (overrideUrl) {
+    rec.url = overrideUrl
+  }
+  return rec
 }
 
 export const createMediaSet = (
@@ -1887,10 +1892,12 @@ export const mockCategories = [
   },
 ]
 export const getCategoryStructuredData = (category) => {
+  const caturl = `https://gousto.co.uk${category.url}`
+
   return {
     '@context': 'http://schema.org/',
     '@type': ['ItemList', 'Recipe'],
-    url: `https://gousto.co.uk${category.url}`,
+    url: caturl,
     name: category.title,
     description: category.description,
     author: {
@@ -1912,7 +1919,7 @@ export const getCategoryStructuredData = (category) => {
       return {
         '@type': 'ListItem',
         position: index + 1,
-        item: getRecipeStructuredData(recipe),
+        item: getRecipeStructuredData(recipe, caturl),
       }
     }),
   }
